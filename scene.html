@@ -1,0 +1,129 @@
+<!DOCTYPE html>
+<html>
+  <head>
+    <script src="https://aframe.io/releases/1.4.0/aframe.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/gh/donmccurdy/aframe-extras@v6.1.1/dist/aframe-extras.min.js"></script>
+    <style>
+      /* CSS for our Editor UI */
+      #ui-overlay {
+        position: absolute; top: 20px; left: 20px; z-index: 100;
+        background: rgba(0,0,0,0.8); color: white; padding: 15px;
+        border-radius: 8px; font-family: sans-serif; display: none;
+      }
+      .menu-btn { 
+        display: block; width: 100%; margin: 5px 0; padding: 8px; 
+        background: #444; color: white; border: none; cursor: pointer;
+      }
+      .menu-btn:hover { background: #666; }
+      #editor-modal {
+        position: absolute; top: 50%; left: 50%; transform: translate(-50%, -50%);
+        background: white; color: black; padding: 20px; border-radius: 10px;
+        z-index: 200; display: none; box-shadow: 0 0 20px black;
+      }
+    </style>
+  </head>
+  <body>
+
+    <!-- CONTEXT MENU UI -->
+    <div id="ui-overlay">
+      <h3 id="menu-title">NPC Options</h3>
+      <button class="menu-btn" onclick="openEditor()">Edit Dialogue</button>
+      <button class="menu-btn" onclick="closeMenu()">Close</button>
+    </div>
+
+    <!-- DIALOGUE EDITOR MODAL -->
+    <div id="editor-modal">
+      <h3>Edit Waitress Dialogue</h3>
+      <textarea id="dialogue-input" rows="4" style="width: 300px;"></textarea><br><br>
+      <button onclick="saveDialogue()">Save & Close</button>
+      <button onclick="document.getElementById('editor-modal').style.display='none'">Cancel</button>
+    </div>
+
+    <a-scene cursor="rayOrigin: mouse" raycaster="objects: .clickable">
+      <a-assets>
+        <a-asset-item id="waitress-model" src="npc.glb"></a-asset-item>
+        <a-asset-item id="room-model" src="scene.glb"></a-asset-item>
+      </a-assets>
+
+      <a-sky color="#111"></a-sky>
+      <a-entity gltf-model="#room-model"></a-entity>
+      <a-plane id="floor" rotation="-90 0 0" width="100" height="100" visible="false" class="clickable"></a-plane>
+
+      <!-- THE NPC -->
+      <a-entity id="npc" class="clickable" gltf-model="#waitress-model" npc-manager>
+          
+          <!-- THE LIGHTBULB (Edit Trigger) -->
+          <a-sphere id="bulb" class="clickable" 
+                    position="0 2.5 0" radius="0.15" color="yellow"
+                    animation="property: position; to: 0 2.7 0; dir: alternate; dur: 1000; loop: true"
+                    animation__color="property: material.emissive; from: #000; to: #ffff00; dir: alternate; dur: 1000; loop: true">
+          </a-sphere>
+
+          <!-- Floating Speech Label (Visual feedback) -->
+          <a-text id="npc-label" value="" position="0 2.2 0" align="center" width="3" color="white"></a-text>
+      </a-entity>
+
+      <a-light type="ambient" intensity="1"></a-light>
+      <a-light type="directional" position="1 1 1"></a-light>
+
+      <a-entity id="rig" position="0 1.6 4">
+        <a-entity camera look-controls wasd-controls></a-entity>
+      </a-entity>
+    </a-scene>
+
+    <script>
+      let currentDialogue = "Welcome to the scene!";
+
+      AFRAME.registerComponent('npc-manager', {
+        init: function () {
+          // Load Saved Dialogue
+          const saved = localStorage.getItem('waitress_dialogue');
+          if (saved) currentDialogue = saved;
+
+          // CLICK LIGHTBULB -> Open Context Menu
+          document.querySelector('#bulb').addEventListener('click', (e) => {
+            e.stopPropagation(); // Stop click from triggering movement
+            document.getElementById('ui-overlay').style.display = 'block';
+          });
+
+          // RIGHT CLICK (Context Menu Event) to Initiate Dialogue
+          window.addEventListener('contextmenu', (e) => {
+            e.preventDefault(); // Stop default browser menu
+            
+            // Check if player is close enough
+            let playerPos = document.querySelector('#rig').object3D.position;
+            let npcPos = this.el.object3D.position;
+            let dist = playerPos.distanceTo(npcPos);
+
+            if (dist < 4) {
+              speakText(currentDialogue);
+            }
+          });
+        }
+      });
+
+      // UI FUNCTIONS
+      function openEditor() {
+        document.getElementById('ui-overlay').style.display = 'none';
+        document.getElementById('editor-modal').style.display = 'block';
+        document.getElementById('dialogue-input').value = currentDialogue;
+      }
+
+      function saveDialogue() {
+        currentDialogue = document.getElementById('dialogue-input').value;
+        localStorage.setItem('waitress_dialogue', currentDialogue);
+        document.getElementById('editor-modal').style.display = 'none';
+        speakText("Dialogue updated: " + currentDialogue);
+      }
+
+      function closeMenu() {
+        document.getElementById('ui-overlay').style.display = 'none';
+      }
+
+      function speakText(message) {
+        window.speechSynthesis.cancel();
+        window.speechSynthesis.speak(new SpeechSynthesisUtterance(message));
+      }
+    </script>
+  </body>
+</html>
