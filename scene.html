@@ -2,117 +2,123 @@
 <html>
   <head>
     <meta charset="utf-8">
-    <title>VR Scene Creator - Fixed</title>
+    <title>VR Scene Creator - Master</title>
     <!-- 1. CORE LIBRARIES -->
     <script src="https://aframe.io/releases/1.4.0/aframe.min.js"></script>
     <script src="https://cdn.jsdelivr.net/gh/donmccurdy/aframe-extras@v6.1.1/dist/aframe-extras.min.js"></script>
-    <!-- 2. DRACO DECODER (For compressed models) -->
+    <!-- 2. DRACO DECODER (Required for your 37MB optimized model) -->
     <script src="https://www.gstatic.com/draco/versioned/decoders/1.5.6/draco_decoder.js"></script>
 
     <style>
-      /* UI DESIGN */
+      /* EDITOR UI DESIGN */
       #ui-overlay {
         position: absolute; top: 20px; left: 20px; z-index: 1000;
-        background: rgba(0,0,0,0.8); color: white; padding: 15px;
-        border-radius: 8px; font-family: sans-serif; display: none;
+        background: rgba(0,0,0,0.85); color: white; padding: 20px;
+        border-radius: 10px; font-family: 'Segoe UI', sans-serif; display: none;
+        box-shadow: 0 4px 15px rgba(0,0,0,0.5);
       }
       .menu-btn { 
-        display: block; width: 100%; margin: 5px 0; padding: 10px; 
-        background: #444; color: white; border: none; cursor: pointer; border-radius: 4px;
+        display: block; width: 100%; margin: 8px 0; padding: 12px; 
+        background: #444; color: white; border: none; cursor: pointer; border-radius: 5px;
+        font-weight: bold; transition: 0.2s;
       }
       .menu-btn:hover { background: #ffcc00; color: black; }
       #editor-modal {
         position: absolute; top: 50%; left: 50%; transform: translate(-50%, -50%);
-        background: white; color: black; padding: 25px; border-radius: 10px;
-        z-index: 2000; display: none; box-shadow: 0 0 30px rgba(0,0,0,0.5);
+        background: white; color: black; padding: 30px; border-radius: 12px;
+        z-index: 2000; display: none; box-shadow: 0 0 40px rgba(0,0,0,0.7);
+        width: 350px; text-align: center;
       }
-      textarea { width: 100%; padding: 10px; margin-bottom: 10px; box-sizing: border-box; }
+      textarea { width: 100%; padding: 10px; margin-bottom: 15px; border: 1px solid #ccc; border-radius: 5px; box-sizing: border-box; }
     </style>
   </head>
 
   <body>
-    <!-- CONTEXT MENU UI -->
+
+    <!-- OVERLAY: NPC OPTIONS -->
     <div id="ui-overlay">
-      <h3 id="menu-title">NPC Options</h3>
+      <h3 style="margin-top:0">Waitress Config</h3>
       <button class="menu-btn" onclick="openEditor()">Edit Dialogue</button>
-      <button class="menu-btn" onclick="closeMenu()">Close Menu</button>
+      <button class="menu-btn" style="background:#800" onclick="closeMenu()">Close Menu</button>
     </div>
 
-    <!-- DIALOGUE EDITOR -->
+    <!-- MODAL: DIALOGUE EDITOR -->
     <div id="editor-modal">
-      <h3>Waitress Dialogue</h3>
-      <p>What should she say when right-clicked?</p>
-      <textarea id="dialogue-input" rows="4"></textarea><br>
-      <button class="menu-btn" style="background: green" onclick="saveDialogue()">Save Dialogue</button>
+      <h3 style="margin-top:0">Edit Dialogue</h3>
+      <p>Type what the waitress should say:</p>
+      <textarea id="dialogue-input" rows="4"></textarea>
+      <button class="menu-btn" style="background: green" onclick="saveDialogue()">Save & Close</button>
       <button class="menu-btn" onclick="document.getElementById('editor-modal').style.display='none'">Cancel</button>
     </div>
 
-    <!-- 3D SCENE -->
     <a-scene 
       loading-screen="enabled: false"
       gltf-model="dracoDecoderPath: https://www.gstatic.com/draco/versioned/decoders/1.5.6/;"
       cursor="rayOrigin: mouse" 
       raycaster="objects: .clickable">
 
-      <a-assets>
-  <!-- We are using the full internet path to be 100% sure -->
-  <a-asset-item id="waitress-model" src="https://snothing666.github.io/dream/npc.glb"></a-asset-item>
-  <a-asset-item id="room-model" src="https://snothing666.github.io/dream/scene.glb"></a-asset-item>
-</a-assets>
+      <a-assets timeout="90000"> <!-- High timeout for the 37MB file -->
+        <a-asset-item id="room-model" src="scene.glb"></a-asset-item>
+        <a-asset-item id="waitress-model" src="npc.glb"></a-asset-item>
+      </a-assets>
+
       <a-sky color="#87CEEB"></a-sky>
 
-      <!-- THE ROOM: Scale set to 10 to fix the "small" issue -->
+      <!-- THE ROOM: Scale set to 10. Change to 30 or 50 if still too small -->
       <a-entity id="room" gltf-model="#room-model" position="0 0 0" scale="10 10 10"></a-entity>
 
-      <!-- THE FLOOR: Invisible target for movement -->
+      <!-- THE PLACEMENT FLOOR: Invisible click target -->
       <a-plane id="placement-floor" class="clickable" rotation="-90 0 0" width="200" height="200" visible="false"></a-plane>
 
-      <!-- THE NPC -->
+      <!-- THE WAITRESS NPC -->
       <a-entity id="npc" class="clickable" gltf-model="#waitress-model" npc-logic>
-          <!-- EDIT LIGHTBULB -->
+          <!-- THE LIGHTBULB TRIGGER -->
           <a-sphere id="bulb" class="clickable" 
-                    position="0 2.4 0" radius="0.15" color="yellow"
-                    animation="property: position; to: 0 2.6 0; dir: alternate; dur: 1000; loop: true"
-                    material="emissive: #ffff00; emissiveIntensity: 0.5">
+                    position="0 2.5 0" radius="0.18" color="yellow"
+                    animation="property: position; to: 0 2.7 0; dir: alternate; dur: 1200; loop: true"
+                    material="emissive: #ffff00; emissiveIntensity: 0.6">
           </a-sphere>
       </a-entity>
 
-      <a-light type="ambient" intensity="0.9"></a-light>
-      <a-light type="directional" position="1 2 1" intensity="0.6"></a-light>
+      <a-light type="ambient" intensity="0.8"></a-light>
+      <a-light type="directional" position="1 2 1" intensity="0.5"></a-light>
 
-      <!-- PLAYER -->
-      <a-entity id="rig" position="0 1.6 5">
-        <a-entity camera look-controls wasd-controls></a-entity>
+      <!-- PLAYER RIG -->
+      <a-entity id="rig" position="0 1.6 6">
+        <a-entity camera look-controls wasd-controls>
+             <!-- Red crosshair for VR/Center focus -->
+             <a-cursor id="cursor" color="red" raycaster="objects: .clickable"></a-cursor>
+        </a-entity>
       </a-entity>
 
     </a-scene>
 
     <script>
-      let currentDialogue = "Welcome to the bar!";
+      let currentDialogue = "Welcome! Looking to order something?";
       let isMovingNPC = false;
 
-      // --- NPC LOGIC COMPONENT ---
       AFRAME.registerComponent('npc-logic', {
         init: function () {
-          // 1. Load Saved Data
+          // 1. Load Saved Data from LocalStorage
           const savedPos = localStorage.getItem('npc_pos');
           const savedText = localStorage.getItem('npc_text');
           if (savedPos) this.el.setAttribute('position', JSON.parse(savedPos));
+          else this.el.setAttribute('position', "2 0 -3");
           if (savedText) currentDialogue = savedText;
 
           // 2. Click NPC -> Toggle Movement
           this.el.addEventListener('click', (e) => {
-            if (e.target.id === 'bulb') return; 
+            if (e.target.id === 'bulb') return; // Ignore if clicking the lightbulb
             
             isMovingNPC = !isMovingNPC;
             if (isMovingNPC) {
-              speakText("Waitress picked up. Click the floor to place her.");
+              speakText("Moving waitress. Look at the floor to place her.");
               this.el.setAttribute('scale', '1.2 1.2 1.2');
-              this.el.classList.remove('clickable'); 
+              this.el.classList.remove('clickable'); // Allow clicking 'through' her to the floor
             }
           });
 
-          // 3. Right Click -> Talk
+          // 3. Right Click -> Talk (Proximity Check)
           window.addEventListener('contextmenu', (e) => {
             e.preventDefault();
             let dist = document.querySelector('#rig').object3D.position.distanceTo(this.el.object3D.position);
@@ -121,7 +127,7 @@
         }
       });
 
-      // --- FLOOR CLICK LOGIC (For Placing) ---
+      // FLOOR CLICK LOGIC (Places the NPC)
       document.querySelector('a-scene').addEventListener('click', function(evt) {
         if (!isMovingNPC) return;
         
@@ -136,11 +142,11 @@
           isMovingNPC = false;
           
           localStorage.setItem('npc_pos', JSON.stringify(npc.getAttribute('position')));
-          speakText("Waitress placed and saved.");
+          speakText("Position saved.");
         }
       });
 
-      // --- UI CONTROLS ---
+      // --- UI FUNCTIONS ---
       document.querySelector('#bulb').addEventListener('click', () => {
         document.getElementById('ui-overlay').style.display = 'block';
       });
@@ -155,7 +161,7 @@
         currentDialogue = document.getElementById('dialogue-input').value;
         localStorage.setItem('npc_text', currentDialogue);
         document.getElementById('editor-modal').style.display = 'none';
-        speakText("Dialogue updated.");
+        speakText("Dialogue saved.");
       }
 
       function closeMenu() {
@@ -171,4 +177,3 @@
     </script>
   </body>
 </html>
-
