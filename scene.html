@@ -2,70 +2,60 @@
 <html>
   <head>
     <meta charset="utf-8">
-    <title>VR Scene Creator - Quest 2 Pro</title>
+    <title>VR Scene - Asset Aligned</title>
     <script src="https://aframe.io/releases/1.4.0/aframe.min.js"></script>
     <script src="https://cdn.jsdelivr.net/gh/donmccurdy/aframe-extras@v6.1.1/dist/aframe-extras.min.js"></script>
-    <script src="https://www.gstatic.com/draco/versioned/decoders/1.5.6/draco_decoder.js"></script>
-    
     <style>
       #ui-overlay {
         position: absolute; top: 20px; left: 20px; z-index: 1000;
         background: rgba(0,0,0,0.8); color: white; padding: 15px;
         border-radius: 8px; font-family: sans-serif; display: none;
       }
-      .menu-btn { display: block; width: 100%; margin: 5px 0; padding: 10px; background: #444; color: white; border: none; cursor: pointer; }
     </style>
   </head>
 
   <body>
-    <!-- UI MENU (PC Only) -->
     <div id="ui-overlay">
-      <h3>NPC Settings</h3>
-      <button class="menu-btn" onclick="speakText(currentDialogue)">Test Voice</button>
-      <button class="menu-btn" onclick="closeMenu()">Close</button>
+      <h3 id="menu-title">NPC Dialogue</h3>
+      <p id="menu-text"></p>
+      <button onclick="document.getElementById('ui-overlay').style.display='none'">Close</button>
     </div>
 
     <a-scene 
       gltf-model="dracoDecoderPath: https://www.gstatic.com/draco/versioned/decoders/1.5.6/;"
-      loading-screen="enabled: false"
       renderer="antialias: true; colorManagement: true;">
 
-      <a-assets timeout="120000">
+      <a-assets>
         <a-asset-item id="room-model" src="https://snothing666.github.io/dream/scene.glb"></a-asset-item>
         <a-asset-item id="npc-model" src="https://snothing666.github.io/dream/npc.glb"></a-asset-item>
       </a-assets>
 
       <a-sky color="#87CEEB"></a-sky>
 
-      <!-- THE ROOM -->
-      <a-entity id="room" gltf-model="#room-model" position="94 0 -16" scale="1 1 1"></a-entity>
+      <!-- THE ROOM: Kept at your specific aligned coordinates -->
+      <a-entity id="room" gltf-model="#room-model" position="94 0 -16"></a-entity>
 
-      <!-- THE PLACEMENT FLOOR -->
-      <a-plane id="floor" class="clickable" rotation="-90 0 0" width="200" height="200" visible="false"></a-plane>
+      <!-- THE PLACEMENT FLOOR: Adjusted to match your room's location so dragging works -->
+      <a-plane id="floor" class="clickable" position="94 0.01 -16" rotation="-90 0 0" width="200" height="200" visible="false"></a-plane>
 
       <!-- THE NPC -->
       <a-entity id="npc" class="clickable" gltf-model="#npc-model" npc-manager>
           <a-sphere id="bulb" class="clickable" position="0 2.5 0" radius="0.15" color="yellow"></a-sphere>
+          <!-- 3D Text for VR visibility -->
+          <a-entity id="npc-label" text="value: NPC; align: center; width: 3" position="0 3 0"></a-entity>
       </a-entity>
 
       <a-light type="ambient" intensity="0.9"></a-light>
       <a-light type="directional" position="1 2 1"></a-light>
 
-      <!-- PLAYER RIG (Supports Thumbstick Walking + Controllers) -->
-      <a-entity id="rig" movement-controls="fly: false; speed: 0.2" position="0 0 5">
+      <!-- PLAYER RIG: Starting near your room's coordinates (94, -16) -->
+      <a-entity id="rig" movement-controls="fly: false; speed: 0.2" position="94 0 -10">
         <a-entity camera look-controls wasd-controls position="0 1.6 0">
-            <!-- Desktop Mouse Cursor -->
             <a-cursor id="mouse-cursor" raycaster="objects: .clickable" cursor="rayOrigin: mouse"></a-cursor>
         </a-entity>
 
-        <!-- Left Controller (Shows model + Thumbstick Move) -->
         <a-entity oculus-touch-controls="hand: left"></a-entity>
-
-        <!-- Right Controller (Shows model + Laser Pointer for clicking) -->
-        <a-entity oculus-touch-controls="hand: right" 
-                  laser-controls="hand: right" 
-                  raycaster="objects: .clickable; far: 20; interval: 100">
-        </a-entity>
+        <a-entity oculus-touch-controls="hand: right" laser-controls="hand: right" raycaster="objects: .clickable; far: 30"></a-entity>
       </a-entity>
 
     </a-scene>
@@ -77,25 +67,30 @@
         init: function () {
           this.isDragging = false;
           
-          // Load Saved Position
+          // Apply saved position if it exists
           const saved = localStorage.getItem('npc_pos');
-          if (saved) this.el.setAttribute('position', JSON.parse(saved));
+          if (saved) {
+              this.el.setAttribute('position', JSON.parse(saved));
+          } else {
+              // Default starting position relative to your room
+              this.el.setAttribute('position', {x: 94, y: 0, z: -16});
+          }
 
           this.el.addEventListener('click', (evt) => {
-            // If clicking lightbulb, show menu (PC) or talk (VR)
             if (evt.detail.intersectedEl && evt.detail.intersectedEl.id === 'bulb') {
+                // Show PC UI
                 document.getElementById('ui-overlay').style.display = 'block';
+                document.getElementById('menu-text').innerText = currentDialogue;
                 speakText(currentDialogue);
                 return;
             }
 
-            // Toggle Dragging
             this.isDragging = !this.isDragging;
             if (this.isDragging) {
-              speakText("Moving waitress.");
+              speakText("Moving");
               this.el.setAttribute('scale', '1.2 1.2 1.2');
             } else {
-              speakText("Position saved.");
+              speakText("Saved");
               this.el.setAttribute('scale', '1 1 1');
               localStorage.setItem('npc_pos', JSON.stringify(this.el.getAttribute('position')));
             }
@@ -105,16 +100,18 @@
         tick: function () {
           if (!this.isDragging) return;
 
-          // Find the active raycaster (could be the mouse OR the Quest controller)
           const cursors = document.querySelectorAll('[raycaster]');
           let intersection = null;
 
           cursors.forEach(c => {
-            const check = c.components.raycaster.getIntersection(document.querySelector('#floor'));
-            if (check) intersection = check;
+            const intersects = c.components.raycaster.intersections;
+            // Specifically look for the intersection with our floor plane
+            const hit = intersects.find(i => i.object.el.id === 'floor');
+            if (hit) intersection = hit;
           });
 
           if (intersection) {
+            // Update NPC position to the floor hit point
             this.el.setAttribute('position', { x: intersection.point.x, y: 0, z: intersection.point.z });
           }
         }
@@ -124,9 +121,6 @@
         window.speechSynthesis.cancel();
         window.speechSynthesis.speak(new SpeechSynthesisUtterance(text));
       }
-
-      function closeMenu() { document.getElementById('ui-overlay').style.display = 'none'; }
     </script>
   </body>
 </html>
-
