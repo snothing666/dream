@@ -2,97 +2,130 @@
 <html>
   <head>
     <meta charset="utf-8">
-    <title>VR Scene Creator - Absolute Fix</title>
+    <title>VR Scene Creator - Quest 2 Pro</title>
     <script src="https://aframe.io/releases/1.4.0/aframe.min.js"></script>
     <script src="https://cdn.jsdelivr.net/gh/donmccurdy/aframe-extras@v6.1.1/dist/aframe-extras.min.js"></script>
-    <!-- DRACO DECODER -->
     <script src="https://www.gstatic.com/draco/versioned/decoders/1.5.6/draco_decoder.js"></script>
-
+    
     <style>
       #ui-overlay {
         position: absolute; top: 20px; left: 20px; z-index: 1000;
-        background: rgba(0,0,0,0.85); color: white; padding: 20px;
-        border-radius: 10px; font-family: sans-serif; display: none;
+        background: rgba(0,0,0,0.8); color: white; padding: 15px;
+        border-radius: 8px; font-family: sans-serif; display: none;
       }
-      .menu-btn { 
-        display: block; width: 100%; margin: 8px 0; padding: 12px; 
-        background: #444; color: white; border: none; cursor: pointer; border-radius: 5px;
-      }
-      .menu-btn:hover { background: #ffcc00; color: black; }
+      .menu-btn { display: block; width: 100%; margin: 5px 0; padding: 10px; background: #444; color: white; border: none; cursor: pointer; }
     </style>
   </head>
 
   <body>
-    <!-- UI MENU -->
+    <!-- UI MENU (PC Only) -->
     <div id="ui-overlay">
-      <h3>NPC Options</h3>
-      <button class="menu-btn" onclick="openEditor()">Edit Dialogue</button>
+      <h3>NPC Settings</h3>
+      <button class="menu-btn" onclick="speakText(currentDialogue)">Test Voice</button>
       <button class="menu-btn" onclick="closeMenu()">Close</button>
     </div>
 
-    <!-- 3D SCENE -->
     <a-scene 
-      loading-screen="enabled: false"
       gltf-model="dracoDecoderPath: https://www.gstatic.com/draco/versioned/decoders/1.5.6/;"
-      cursor="rayOrigin: mouse" 
-      raycaster="objects: .clickable">
+      loading-screen="enabled: false"
+      renderer="antialias: true; colorManagement: true;">
 
-      <a-assets timeout="120000"> <!-- Wait 2 minutes for the 37MB file -->
-        <!-- WE ARE USING ABSOLUTE URLS NOW TO STOP THE 404 ERRORS -->
+      <a-assets timeout="120000">
         <a-asset-item id="room-model" src="https://snothing666.github.io/dream/scene.glb"></a-asset-item>
-        <a-asset-item id="waitress-model" src="https://snothing666.github.io/dream/npc.glb"></a-asset-item>
+        <a-asset-item id="npc-model" src="https://snothing666.github.io/dream/npc.glb"></a-asset-item>
       </a-assets>
 
       <a-sky color="#87CEEB"></a-sky>
 
-      <!-- ROOM: Set to scale 1. If it's too small, we will use the Inspector to find the real size -->
-      <a-entity id="room" 
-                gltf-model="#room-model" 
-                position="94 0 -16" 
-                scale="1 1 1">
-      </a-entity>
+      <!-- THE ROOM -->
+      <a-entity id="room" gltf-model="#room-model" position="0 0 0" scale="1 1 1"></a-entity>
 
-      <!-- NPC -->
-      <a-entity id="npc" class="clickable" 
-                gltf-model="#waitress-model" 
-                position="0 0 -5"
-                npc-logic>
+      <!-- THE PLACEMENT FLOOR -->
+      <a-plane id="floor" class="clickable" rotation="-90 0 0" width="200" height="200" visible="false"></a-plane>
+
+      <!-- THE NPC -->
+      <a-entity id="npc" class="clickable" gltf-model="#npc-model" npc-manager>
           <a-sphere id="bulb" class="clickable" position="0 2.5 0" radius="0.15" color="yellow"></a-sphere>
       </a-entity>
 
-      <a-light type="ambient" intensity="1"></a-light>
+      <a-light type="ambient" intensity="0.9"></a-light>
       <a-light type="directional" position="1 2 1"></a-light>
 
-      <a-entity id="rig" position="0 1.6 6">
-        <a-entity camera look-controls wasd-controls></a-entity>
+      <!-- PLAYER RIG (Supports Thumbstick Walking + Controllers) -->
+      <a-entity id="rig" movement-controls="fly: false; speed: 0.2" position="0 0 5">
+        <a-entity camera look-controls wasd-controls position="0 1.6 0">
+            <!-- Desktop Mouse Cursor -->
+            <a-cursor id="mouse-cursor" raycaster="objects: .clickable" cursor="rayOrigin: mouse"></a-cursor>
+        </a-entity>
+
+        <!-- Left Controller (Shows model + Thumbstick Move) -->
+        <a-entity oculus-touch-controls="hand: left"></a-entity>
+
+        <!-- Right Controller (Shows model + Laser Pointer for clicking) -->
+        <a-entity oculus-touch-controls="hand: right" 
+                  laser-controls="hand: right" 
+                  raycaster="objects: .clickable; far: 20; interval: 100">
+        </a-entity>
       </a-entity>
+
     </a-scene>
 
     <script>
-      // Diagnostic: Check if the file is actually loading
-      document.querySelector('#room-model').addEventListener('model-loaded', () => {
-        console.log("SUCCESS: Room model loaded!");
-      });
-      document.querySelector('#room-model').addEventListener('model-error', (e) => {
-        console.error("ERROR: Room model failed to load. Check filename casing.");
-      });
+      let currentDialogue = "Welcome to my bar! How can I help you?";
 
-      // Simple NPC Logic for Dialogue
-      AFRAME.registerComponent('npc-logic', {
+      AFRAME.registerComponent('npc-manager', {
         init: function () {
-          this.el.addEventListener('click', (e) => {
-            if (e.target.id === 'bulb') {
-              document.getElementById('ui-overlay').style.display = 'block';
+          this.isDragging = false;
+          
+          // Load Saved Position
+          const saved = localStorage.getItem('npc_pos');
+          if (saved) this.el.setAttribute('position', JSON.parse(saved));
+
+          this.el.addEventListener('click', (evt) => {
+            // If clicking lightbulb, show menu (PC) or talk (VR)
+            if (evt.detail.intersectedEl && evt.detail.intersectedEl.id === 'bulb') {
+                document.getElementById('ui-overlay').style.display = 'block';
+                speakText(currentDialogue);
+                return;
+            }
+
+            // Toggle Dragging
+            this.isDragging = !this.isDragging;
+            if (this.isDragging) {
+              speakText("Moving waitress.");
+              this.el.setAttribute('scale', '1.2 1.2 1.2');
             } else {
-              window.speechSynthesis.speak(new SpeechSynthesisUtterance("Welcome!"));
+              speakText("Position saved.");
+              this.el.setAttribute('scale', '1 1 1');
+              localStorage.setItem('npc_pos', JSON.stringify(this.el.getAttribute('position')));
             }
           });
+        },
+
+        tick: function () {
+          if (!this.isDragging) return;
+
+          // Find the active raycaster (could be the mouse OR the Quest controller)
+          const cursors = document.querySelectorAll('[raycaster]');
+          let intersection = null;
+
+          cursors.forEach(c => {
+            const check = c.components.raycaster.getIntersection(document.querySelector('#floor'));
+            if (check) intersection = check;
+          });
+
+          if (intersection) {
+            this.el.setAttribute('position', { x: intersection.point.x, y: 0, z: intersection.point.z });
+          }
         }
       });
+
+      function speakText(text) {
+        window.speechSynthesis.cancel();
+        window.speechSynthesis.speak(new SpeechSynthesisUtterance(text));
+      }
 
       function closeMenu() { document.getElementById('ui-overlay').style.display = 'none'; }
     </script>
   </body>
 </html>
-
-
