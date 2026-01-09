@@ -1,126 +1,109 @@
 <!DOCTYPE html>
 <html>
   <head>
-    <meta charset="utf-8">
-    <title>VR Scene - Asset Aligned</title>
-    <script src="https://aframe.io/releases/1.4.0/aframe.min.js"></script>
-    <script src="https://cdn.jsdelivr.net/gh/donmccurdy/aframe-extras@v6.1.1/dist/aframe-extras.min.js"></script>
-    <style>
-      #ui-overlay {
-        position: absolute; top: 20px; left: 20px; z-index: 1000;
-        background: rgba(0,0,0,0.8); color: white; padding: 15px;
-        border-radius: 8px; font-family: sans-serif; display: none;
-      }
-    </style>
-  </head>
-
-  <body>
-    <div id="ui-overlay">
-      <h3 id="menu-title">NPC Dialogue</h3>
-      <p id="menu-text"></p>
-      <button onclick="document.getElementById('ui-overlay').style.display='none'">Close</button>
-    </div>
-
-    <a-scene 
-      gltf-model="dracoDecoderPath: https://www.gstatic.com/draco/versioned/decoders/1.5.6/;"
-      renderer="antialias: true; colorManagement: true;">
-
-      <a-assets>
-        <a-asset-item id="room-model" src="https://snothing666.github.io/dream/scene.glb"></a-asset-item>
-        <a-asset-item id="npc-model" src="https://snothing666.github.io/dream/npc.glb"></a-asset-item>
-      </a-assets>
-
-      <a-sky color="#87CEEB"></a-sky>
-
-      <!-- THE ROOM: Kept at your specific aligned coordinates -->
-      <a-entity id="room" gltf-model="#room-model" position="94 0 -16"></a-entity>
-
-      <!-- THE PLACEMENT FLOOR: Adjusted to match your room's location so dragging works -->
-      <a-plane id="floor" class="clickable" position="94 0.01 -16" rotation="-90 0 0" width="200" height="200" visible="false"></a-plane>
-
-      <!-- THE NPC -->
-      <a-entity id="npc" class="clickable" gltf-model="#npc-model" npc-manager>
-          <a-sphere id="bulb" class="clickable" position="0 2.5 0" radius="0.15" color="yellow"></a-sphere>
-          <!-- 3D Text for VR visibility -->
-          <a-entity id="npc-label" text="value: NPC; align: center; width: 3" position="0 3 0"></a-entity>
-      </a-entity>
-
-      <a-light type="ambient" intensity="0.9"></a-light>
-      <a-light type="directional" position="1 2 1"></a-light>
-
-      <!-- PLAYER RIG: Starting near your room's coordinates (94, -16) -->
-      <a-entity id="rig" movement-controls="fly: false; speed: 0.2" position="94 0 -10">
-        <a-entity camera look-controls wasd-controls position="0 1.6 0">
-            <a-cursor id="mouse-cursor" raycaster="objects: .clickable" cursor="rayOrigin: mouse"></a-cursor>
-        </a-entity>
-
-        <a-entity oculus-touch-controls="hand: left"></a-entity>
-        <a-entity oculus-touch-controls="hand: right" laser-controls="hand: right" raycaster="objects: .clickable; far: 30"></a-entity>
-      </a-entity>
-
-    </a-scene>
+    <title>Architect OS: Master Alpha</title>
+    <script src="https://aframe.io/releases/1.6.0/aframe.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/gh/donmccurdy/aframe-extras@v7.2.0/dist/aframe-extras.min.js"></script>
+    <script src="https://unpkg.com/aframe-environment-component@1.3.2/dist/aframe-environment-component.min.js"></script>
 
     <script>
-      let currentDialogue = "Welcome to my bar! How can I help you?";
-
-      AFRAME.registerComponent('npc-manager', {
-        init: function () {
-          this.isDragging = false;
-          
-          // Apply saved position if it exists
-          const saved = localStorage.getItem('npc_pos');
-          if (saved) {
-              this.el.setAttribute('position', JSON.parse(saved));
-          } else {
-              // Default starting position relative to your room
-              this.el.setAttribute('position', {x: 94, y: 0, z: -16});
+      // --- ARCHITECT OS ENGINE ---
+      window.ArchitectOS = {
+        speak: function(text, pitch = 1.0) {
+          if ('speechSynthesis' in window) {
+            const utter = new SpeechSynthesisUtterance(text);
+            utter.pitch = pitch;
+            window.speechSynthesis.cancel();
+            window.speechSynthesis.speak(utter);
           }
+          document.querySelector('#hud-text').setAttribute('value', text);
+        }
+      };
 
-          this.el.addEventListener('click', (evt) => {
-            if (evt.detail.intersectedEl && evt.detail.intersectedEl.id === 'bulb') {
-                // Show PC UI
-                document.getElementById('ui-overlay').style.display = 'block';
-                document.getElementById('menu-text').innerText = currentDialogue;
-                speakText(currentDialogue);
-                return;
-            }
-
-            this.isDragging = !this.isDragging;
-            if (this.isDragging) {
-              speakText("Moving");
-              this.el.setAttribute('scale', '1.2 1.2 1.2');
-            } else {
-              speakText("Saved");
-              this.el.setAttribute('scale', '1 1 1');
-              localStorage.setItem('npc_pos', JSON.stringify(this.el.getAttribute('position')));
-            }
-          });
+      // Handle Tablet visibility
+      AFRAME.registerComponent('wrist-os', {
+        init: function () { 
+          // Default hidden for VR, but we can force it for PC
+          this.el.setAttribute('visible', false); 
         },
-
         tick: function () {
-          if (!this.isDragging) return;
-
-          const cursors = document.querySelectorAll('[raycaster]');
-          let intersection = null;
-
-          cursors.forEach(c => {
-            const intersects = c.components.raycaster.intersections;
-            // Specifically look for the intersection with our floor plane
-            const hit = intersects.find(i => i.object.el.id === 'floor');
-            if (hit) intersection = hit;
-          });
-
-          if (intersection) {
-            // Update NPC position to the floor hit point
-            this.el.setAttribute('position', { x: intersection.point.x, y: 0, z: intersection.point.z });
+          const rot = this.el.object3D.rotation;
+          // Only show if palm is facing face (VR only)
+          if (!this.el.hasAttribute('debug-on')) {
+            this.el.setAttribute('visible', Math.abs(rot.z) > 1.2);
           }
         }
       });
 
-      function speakText(text) {
-        window.speechSynthesis.cancel();
-        window.speechSynthesis.speak(new SpeechSynthesisUtterance(text));
-      }
+      // Desktop Debug: Press 'M' to see the tablet on your monitor
+      window.addEventListener('keydown', (e) => {
+        if (e.key === 'm') {
+          const tablet = document.querySelector('#tablet-container');
+          const isVisible = tablet.getAttribute('visible');
+          tablet.setAttribute('visible', !isVisible);
+          tablet.setAttribute('debug-on', ''); // Disable wrist-flip check
+          tablet.setAttribute('position', '0 0 -0.5'); 
+          tablet.setAttribute('rotation', '0 0 0');
+        }
+      });
     </script>
+  </head>
+
+  <body>
+    <!-- Main Scene -->
+    <a-scene shadow="type: pcfsoft" renderer="colorManagement: true;">
+      
+      <a-assets>
+        <img id="tablet-ui" src="https://i.imgur.com/8AD6D1O.png" crossorigin="anonymous">
+        <a-mixin id="btn" geometry="primitive: plane; width: 0.28; height: 0.07" material="color: #111" text="align: center; width: 0.5; color: #0FF"></a-mixin>
+      </a-assets>
+
+      <!-- THE LABORATORY (Fixed Lighting & White Room) -->
+      <a-sky color="#ffffff"></a-sky>
+      <a-entity environment="preset: contact; grid: cross; gridColor: #666; lighting: none; skyType: color; skyColor: #ffffff"></a-entity>
+
+      <!-- Master Lights -->
+      <a-entity light="type: ambient; intensity: 0.7"></a-entity>
+      <a-entity light="type: directional; intensity: 0.8; castShadow: true" position="1 4 2"></a-entity>
+
+      <!-- PLAYER RIG -->
+      <a-entity id="rig" movement-controls="speed: 0.15">
+        <a-entity id="camera" camera position="0 1.6 0" look-controls>
+          <!-- HUD Text (Moved slightly higher) -->
+          <a-text id="hud-text" value="ARCHITECT CONNECTED" position="0 -0.3 -1" align="center" width="1.2" color="cyan" font="monoid"></a-text>
+        </a-entity>
+
+        <!-- LEFT HAND (Tablet) -->
+        <a-entity id="leftHand" oculus-touch-controls="hand: left">
+           <a-entity id="tablet-container" wrist-os position="0.1 0.1 0.1" rotation="-90 0 0">
+              <a-plane width="0.32" height="0.48" material="src: #tablet-ui; color: #000">
+                <a-text value="ARCHITECT OS v1.5" position="0 0.2 0.01" align="center" width="0.6" color="cyan"></a-text>
+                
+                <a-entity position="0 0.05 0.01">
+                   <a-entity mixin="btn" position="0 0 0" text="value: INITIALIZE UNIT" class="interactable"
+                             onclick="window.ArchitectOS.speak('Unit Initialized. Awaiting Loop Command.', 1.0)"></a-entity>
+                   <a-entity mixin="btn" position="0 -0.1 0" text="value: APPLY BEAUTY" class="interactable"
+                             onclick="window.ArchitectOS.speak('The world is a gift.', 1.2)"></a-entity>
+                   <a-entity mixin="btn" position="0 -0.2 0" text="value: APPLY STRENGTH" class="interactable"
+                             onclick="window.ArchitectOS.speak('I will win this game.', 0.6)"></a-entity>
+                </a-entity>
+              </a-plane>
+           </a-entity>
+        </a-entity>
+
+        <!-- RIGHT HAND (Interaction) -->
+        <a-entity id="rightHand" oculus-touch-controls="hand: right"
+                  raycaster="objects: .interactable; showLine: true" line="color: cyan"></a-entity>
+      </a-entity>
+
+      <!-- THE TARGET HOST -->
+      <a-entity id="host-platform" position="0 0 -3">
+          <a-cylinder radius="0.25" height="1.6" position="0 0.8 0" color="#222" metalness="0.6"></a-cylinder>
+          <a-text value="UNIT_01" position="0 1.8 0" align="center" width="3" color="#333"></a-text>
+          <!-- Platform Base -->
+          <a-cylinder radius="1" height="0.1" color="#eee"></a-cylinder>
+      </a-entity>
+
+    </a-scene>
   </body>
 </html>
